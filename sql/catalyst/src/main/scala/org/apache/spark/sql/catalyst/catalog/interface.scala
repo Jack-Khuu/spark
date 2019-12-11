@@ -420,7 +420,8 @@ case class CatalogColumnStat(
     avgLen: Option[Long] = None,
     maxLen: Option[Long] = None,
     histogram: Option[Histogram] = None,
-    version: Int = CatalogColumnStat.VERSION) {
+    version: Int = CatalogColumnStat.VERSION,
+    maxDegree: Option[String] = None) {
 
   /**
    * Returns a map from string to string that can be used to serialize the column stats.
@@ -448,6 +449,7 @@ case class CatalogColumnStat(
     histogram.foreach { h =>
       map.put(s"${colName}.${CatalogColumnStat.KEY_HISTOGRAM}", HistogramSerializer.serialize(h))
     }
+    maxDegree.foreach { v => map.put(s"${colName}.${CatalogColumnStat.KEY_MAX_DEGREE}", v) }
     map.toMap
   }
 
@@ -463,7 +465,8 @@ case class CatalogColumnStat(
       avgLen = avgLen,
       maxLen = maxLen,
       histogram = histogram,
-      version = version)
+      version = version,
+      maxDegree = maxDegree.map(CatalogColumnStat.fromExternalString(_, colName, dataType, version)))
 }
 
 object CatalogColumnStat extends Logging {
@@ -477,6 +480,7 @@ object CatalogColumnStat extends Logging {
   private val KEY_AVG_LEN = "avgLen"
   private val KEY_MAX_LEN = "maxLen"
   private val KEY_HISTOGRAM = "histogram"
+  private val KEY_MAX_DEGREE = "maxDegree"
 
   val VERSION = 2
 
@@ -548,7 +552,8 @@ object CatalogColumnStat extends Logging {
         avgLen = map.get(s"${colName}.${KEY_AVG_LEN}").map(_.toLong),
         maxLen = map.get(s"${colName}.${KEY_MAX_LEN}").map(_.toLong),
         histogram = map.get(s"${colName}.${KEY_HISTOGRAM}").map(HistogramSerializer.deserialize),
-        version = map(s"${colName}.${KEY_VERSION}").toInt
+        version = map(s"${colName}.${KEY_VERSION}").toInt,
+        maxDegree = map.get(s"${colName}.${KEY_MAX_DEGREE}")
       ))
     } catch {
       case NonFatal(e) =>

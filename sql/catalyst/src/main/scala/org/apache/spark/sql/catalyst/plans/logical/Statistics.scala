@@ -100,7 +100,8 @@ case class ColumnStat(
     avgLen: Option[Long] = None,
     maxLen: Option[Long] = None,
     histogram: Option[Histogram] = None,
-    version: Int = CatalogColumnStat.VERSION) {
+    version: Int = CatalogColumnStat.VERSION,
+    maxDegree: Option[Any] = None) {
 
   // Are distinctCount and nullCount statistics defined?
   val hasCountStats = distinctCount.isDefined && nullCount.isDefined
@@ -120,7 +121,8 @@ case class ColumnStat(
       avgLen = avgLen,
       maxLen = maxLen,
       histogram = histogram,
-      version = version)
+      version = version,
+      maxDegree = maxDegree.map(CatalogColumnStat.toExternalString(_, colName, dataType)))
 }
 
 /**

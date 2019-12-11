@@ -190,9 +190,11 @@ object CommandUtils extends Logging {
     val rowCount = statsRow.getLong(0)
     val columnStats = columns.zipWithIndex.map { case (attr, i) =>
       // according to `statExprs`, the stats struct always have 7 fields.
-      (attr, rowToColumnStat(statsRow.getStruct(i + 1, 7), attr, rowCount,
+      (attr, rowToColumnStat(statsRow.getStruct(i + 1, 8), attr, rowCount,
         attributePercentiles.get(attr)))
     }.toMap
+    println(columnStats)
+    println("HERE: In CommandUtils.computeColumnStats")
     (rowCount, columnStats)
   }
 
@@ -258,6 +260,8 @@ object CommandUtils extends Logging {
     col: Attribute,
     conf: SQLConf,
     colPercentiles: AttributeMap[ArrayData]): CreateNamedStruct = {
+
+    // Convert from Expression to exeutable form
     def struct(exprs: Expression*): CreateNamedStruct = CreateStruct(exprs.map { expr =>
       expr.transformUp { case af: AggregateFunction => af.toAggregateExpression() }
     })
@@ -269,6 +273,7 @@ object CommandUtils extends Logging {
     val numNulls = Subtract(Count(one), numNonNulls)
     val defaultSize = Literal(col.dataType.defaultSize.toLong, LongType)
     val nullArray = Literal(null, ArrayType(LongType))
+    val maxDuplicate = Subtract(Count(one), ndv)
 
     def fixedLenTypeStruct: CreateNamedStruct = {
       val genHistogram =
@@ -280,8 +285,15 @@ object CommandUtils extends Logging {
         nullArray
       }
       // For fixed width types, avg size should be the same as max size.
-      struct(ndv, Cast(Min(col), col.dataType), Cast(Max(col), col.dataType), numNulls,
-        defaultSize, defaultSize, intervalNdvsExpr)
+      struct(ndv, 
+              Cast(Min(col), col.dataType), 
+              Cast(Max(col), col.dataType), 
+              numNulls,
+              defaultSize, 
+              defaultSize, 
+              Cast(maxDuplicate, col.dataType), 
+              intervalNdvsExpr,
+            )
     }
 
     col.dataType match {
@@ -299,6 +311,9 @@ object CommandUtils extends Logging {
           // Set avg/max size to default size if all the values are null or there is no value.
           Coalesce(Seq(Ceil(Average(Length(col))), defaultSize)),
           Coalesce(Seq(Cast(Max(Length(col)), LongType), defaultSize)),
+          // Investigate Typing propogation for String columns
+          // Cast(maxDuplicate, col.dataType), 
+          nullLit,
           nullArray)
       case _ =>
         throw new AnalysisException("Analyzing column statistics is not supported for column " +
@@ -316,6 +331,7 @@ object CommandUtils extends Logging {
     rowCount: Long,
     percentiles: Option[ArrayData]): ColumnStat = {
     // The first 6 fields are basic column stats, the 7th is ndvs for histogram bins.
+    // EDIT: Added Degree as the 7th field, bumped ndvs to 8
     val cs = ColumnStat(
       distinctCount = Option(BigInt(row.getLong(0))),
       // for string/binary min/max, get should return null
@@ -323,12 +339,13 @@ object CommandUtils extends Logging {
       max = Option(row.get(2, attr.dataType)),
       nullCount = Option(BigInt(row.getLong(3))),
       avgLen = Option(row.getLong(4)),
-      maxLen = Option(row.getLong(5))
+      maxLen = Option(row.getLong(5)),
+      maxDegree = Option(row.get(6, attr.dataType))
     )
-    if (row.isNullAt(6) || cs.nullCount.isEmpty) {
+    if (row.isNullAt(7) || cs.nullCount.isEmpty) {
       cs
     } else {
-      val ndvs = row.getArray(6).toLongArray()
+      val ndvs = row.getArray(7).toLongArray()
       assert(percentiles.get.numElements() == ndvs.length + 1)
       val endpoints = percentiles.get.toArray[Any](attr.dataType).map(_.toString.toDouble)
       // Construct equi-height histogram
