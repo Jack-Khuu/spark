@@ -30,9 +30,12 @@ trait LogicalPlanStats { self: LogicalPlan =>
    * first time. If the configuration changes, the cache can be invalidated by calling
    * [[invalidateStatsCache()]].
    */
+
+  // Stats are being regenerated for each Logical Plan instance when stats is called
   def stats: Statistics = statsCache.getOrElse {
     if (conf.cboEnabled) {
       statsCache = Option(BasicStatsPlanVisitor.visit(self))
+      println(s"Inside of LogicalPlanStats Using PlanVisitor (CacheMiss): ${statsCache.get}")
     } else {
       statsCache = Option(SizeInBytesOnlyStatsPlanVisitor.visit(self))
     }

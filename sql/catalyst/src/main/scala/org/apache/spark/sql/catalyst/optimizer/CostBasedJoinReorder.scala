@@ -150,6 +150,8 @@ object JoinReorderDP extends PredicateHelper with Logging {
     // Level i maintains all found plans for i + 1 items.
     // Create the initial plans: each plan is a single item with zero cost.
     val itemIndex = items.zipWithIndex
+
+    // [COST] Initialize individual items as plans with no cost
     val foundPlans = mutable.Buffer[JoinPlanMap](itemIndex.map {
       case (item, id) => Set(id) -> JoinPlan(Set(id), item, Set.empty, Cost(0, 0))
     }.toMap)
@@ -295,6 +297,8 @@ object JoinReorderDP extends PredicateHelper with Logging {
     } else {
       (otherPlan, onePlan)
     }
+
+    // Create the output node plan
     val newJoin = Join(left, right, Inner, joinConds.reduceOption(And), JoinHint.NONE)
     val collectedJoinConds = joinConds ++ oneJoinPlan.joinConds ++ otherJoinPlan.joinConds
     val remainingConds = conditions -- collectedJoinConds
@@ -310,6 +314,15 @@ object JoinReorderDP extends PredicateHelper with Logging {
     val itemIds = oneJoinPlan.itemIds.union(otherJoinPlan.itemIds)
     // Now the root node of onePlan/otherPlan becomes an intermediate join (if it's a non-leaf
     // item), so the cost of the new join should also include its own cost.
+
+    // [COST] Cost of joining the plans 
+    // Propogating the cost of the plan that is being considered, based on children
+
+    // planCost: Sum(intermediate joins)
+
+    // newPlanCost = 
+    // Left Intermediate Joins + Right Intermediate Joins, 
+    // Cost of left node (rowCount) + Cost of right node (rowCount) 
     val newPlanCost = oneJoinPlan.planCost + oneJoinPlan.rootCost(conf) +
       otherJoinPlan.planCost + otherJoinPlan.rootCost(conf)
     Some(JoinPlan(itemIds, newPlan, collectedJoinConds, newPlanCost))
@@ -336,6 +349,16 @@ object JoinReorderDP extends PredicateHelper with Logging {
     def rootCost(conf: SQLConf): Cost = {
       if (itemIds.size > 1) {
         val rootStats = plan.stats
+        // Potential change to rowCount injection
+        // rootStats is a LogicalPlanStats (Confirmed to be regen when finding the best plan)
+
+        // [COST] Investigate 
+        // This plan.stats is a Statistics with rowCount, sizeInBytes 
+        // Want attributeStats which is an AttributeMap, but logicalplan may not have
+        println(s"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+        println(s"Join Plan Logical Plan: ${plan}")
+        println(s"Join Plan Logical Stat: ${rootStats}")
+        println(s"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
         Cost(rootStats.rowCount.get, rootStats.sizeInBytes)
       } else {
         // If the plan is a leaf item, it has zero cost.

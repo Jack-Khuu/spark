@@ -390,6 +390,7 @@ case class CatalogStatistics(
    */
   def toPlanStats(planOutput: Seq[Attribute], cboEnabled: Boolean): Statistics = {
     if (cboEnabled && rowCount.isDefined) {
+      println(s"CatalogStatistics toPlanStats colStats: ${colStats}")
       val attrStats = AttributeMap(planOutput
         .flatMap(a => colStats.get(a.name).map(a -> _.toPlanStat(a.name, a.dataType))))
       // Estimate size as number of rows * row size.

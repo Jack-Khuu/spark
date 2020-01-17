@@ -62,10 +62,10 @@ case class Statistics(
 
   /** Readable string representation for the Statistics. */
   def simpleString: String = {
-    Seq(s"sizeInBytes=${Utils.bytesToString(sizeInBytes)}",
+    Seq(s"[Added] Statistics object: sizeInBytes=${Utils.bytesToString(sizeInBytes)}",
       if (rowCount.isDefined) {
         // Show row count in scientific notation.
-        s"rowCount=${BigDecimal(rowCount.get, new MathContext(3, RoundingMode.HALF_UP)).toString()}"
+        s"rowCount=${BigDecimal(rowCount.get, new MathContext(3, RoundingMode.HALF_UP)).toString()}, attributeMap=${attributeStats}"
       } else {
         ""
       }

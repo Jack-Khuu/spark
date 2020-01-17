@@ -13,17 +13,17 @@ val tableNameS = "t1"
 val tableNameS2 = "t2"
 val tableNameM = "t3"
 
-Seq((0, 0, "zero"), (1, 1, "one")).
+Seq((0, 0, 0), (1, 1, 1)).
   toDF("id", "p1", "p2").
   write.
   saveAsTable(tableNameS)
 
-Seq((0, 0, "A"), (1, 1, "B")).
+Seq((0, 0, 10), (1, 1, 11)).
   toDF("id", "p1", "p2").
   write.
   saveAsTable(tableNameS2)
 
-Seq((0, 0, "Red"), (1, 10, "Blue"), (1, 20, "Green"), (0, 30, "Yellow")).
+Seq((0, 0, 100), (1, 10, 110), (1, 20, 120), (0, 30, 130)).
   toDF("id", "p1", "p2").
   write.
   saveAsTable(tableNameM)

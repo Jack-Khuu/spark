@@ -65,6 +65,7 @@ case class JoinEstimation(join: Join) extends Logging {
       val leftRows = leftStats.rowCount.get
       val rightRows = rightStats.rowCount.get
 
+      // If an outer join then make sure to use the correct number of output Rows
       // Make sure outputRows won't be too small based on join type.
       val outputRows = joinType match {
         case LeftOuter =>
@@ -93,6 +94,7 @@ case class JoinEstimation(join: Join) extends Logging {
         // The output is empty, we don't need to keep column stats.
         Nil
       } else if (numInnerJoinedRows == 0) {
+        // Is an Outer Join with no matches
         joinType match {
           // For outer joins, if the join selectivity is 0, the number of output rows is the
           // same as that of the outer side. And column stats of join keys from the outer side
@@ -120,6 +122,7 @@ case class JoinEstimation(join: Join) extends Logging {
         // Cartesian product, just propagate the original column stats
         inputAttrStats.toSeq
       } else {
+        // Update the output stats based on the needed tables (i.e Check for OUTER) 
         join.joinType match {
           // For outer joins, don't update column stats from the outer side.
           case LeftOuter =>
@@ -137,6 +140,7 @@ case class JoinEstimation(join: Join) extends Logging {
         }
       }
 
+      // Collect the calculated stats for the join node
       val outputAttrStats = AttributeMap(outputStats)
       Some(Statistics(
         sizeInBytes = getOutputSize(join.output, outputRows, outputAttrStats),
@@ -182,6 +186,7 @@ case class JoinEstimation(join: Join) extends Logging {
     // If there's no column stats available for join keys, estimate as cartesian product.
     var joinCard: BigInt = leftStats.rowCount.get * rightStats.rowCount.get
     val keyStatsAfterJoin = new mutable.HashMap[Attribute, ColumnStat]()
+
     var i = 0
     while(i < keyPairs.length && joinCard != 0) {
       val (leftKey, rightKey) = keyPairs(i)
@@ -190,6 +195,8 @@ case class JoinEstimation(join: Join) extends Logging {
       val rightKeyStat = rightStats.attributeStats(rightKey)
       val lInterval = ValueInterval(leftKeyStat.min, leftKeyStat.max, leftKey.dataType)
       val rInterval = ValueInterval(rightKeyStat.min, rightKeyStat.max, rightKey.dataType)
+
+      // If the two sides overlap
       if (ValueInterval.isIntersected(lInterval, rInterval)) {
         val (newMin, newMax) = ValueInterval.intersect(lInterval, rInterval, leftKey.dataType)
         val (card, joinStat) = (leftKeyStat.histogram, rightKeyStat.histogram) match {
@@ -208,6 +215,8 @@ case class JoinEstimation(join: Join) extends Logging {
         // Return cardinality estimated from the most selective join keys.
         if (card < joinCard) joinCard = card
       } else {
+        // Disjoint so there is no joinCardinality
+
         // One of the join key pairs is disjoint, thus the two sides of join is disjoint.
         joinCard = 0
       }
@@ -228,6 +237,7 @@ case class JoinEstimation(join: Join) extends Logging {
     // Compute cardinality by the basic formula.
     val card = BigDecimal(leftStats.rowCount.get * rightStats.rowCount.get) / BigDecimal(maxNdv)
 
+    // [STATS] Combine the output column stats
     // Get the intersected column stat.
     val newNdv = Some(leftKeyStat.distinctCount.get.min(rightKeyStat.distinctCount.get))
     val newMaxLen = if (leftKeyStat.maxLen.isDefined && rightKeyStat.maxLen.isDefined) {
@@ -292,6 +302,8 @@ case class JoinEstimation(join: Join) extends Logging {
 
   /**
    * Propagate or update column stats for output attributes.
+   * [Stat] Seems to only update the NDV for the output attributes, consider 
+   * as location for updating stat
    */
   private def updateOutputStats(
       outputRows: BigInt,
